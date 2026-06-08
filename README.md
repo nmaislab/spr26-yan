@@ -178,12 +178,3 @@ python backfill_summaries.py
 ```
 
 ---
-
-## Condition E (model-only vs evasion)
-
-E is **not** the same as C:
-
-- **Poisoning:** malicious clients train on **correct labels** and inject a backdoor via extra gradient steps on class-1→7 samples (`backdoor_gradient_step`). No dataset relabeling.
-- **Evasion:** after forming the poisoned update, the client still runs **`compute_evasion_update`** (Task 3)—the same norm/cosine projection used in C—so the upload is shaped to pass cohort-relative checks.
-
-So E is **model-only poisoning + UBR evasion projection**, not model-only poisoning alone. That is why the table lists both parts.
