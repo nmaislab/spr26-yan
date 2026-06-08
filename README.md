@@ -1,6 +1,3 @@
-<<<<<<< HEAD
-
-=======
 # FedLLM-Guard
 
 Yan Wu · Eyhab Al-Masri · https://github.com/nmaislab/spr26-yan
@@ -120,4 +117,3 @@ cd src && python backfill_summaries.py
 ```
 
 To rerun from scratch you need Ollama for LLM conditions and several hours of GPU time; see commands above for each condition.
->>>>>>> c3858ea (MNIST FedLLM-Guard experiments A-E, hybrid defense, logs and results)
