@@ -2,9 +2,17 @@
 
 Yan Wu · Eyhab Al-Masri · https://github.com/nmaislab/spr26-yan
 
-Flower simulation on MNIST: ten clients, three fixed malicious (30%). Each round the server builds an **update behavior record (UBR)** per client and runs an auditor. Malicious clients get weight zero and do not enter the FedAvg sum.
+## Project description
 
-Standard guard (A/B/C/E): Ollama **qwen2.5:7b** with a cohort-first prompt. Condition **C** adds a UBR evasion attack (~14% bypass in rounds 11–100). Condition **D** repeats the same attack but uses a **profile-hybrid** guard (LLM on cohort rules 1–3, fixed rules on profile when the cohort looks clean) and reaches **0%** attack-phase evasion in our five runs.
+**Problem.** Federated learning lets many clients train a shared model without sharing raw data, but a fraction of clients can poison updates (label flipping, scaled gradients, or updates crafted to look normal). We study whether a server-side guard can catch malicious clients from **update behavior records (UBRs)**—compact stats such as update norm, cosine similarity to the global model, and round-relative cohort deviations.
+
+**Approach.** FedLLM-Guard profiles benign UBRs in a clean run (Task 2), then each round builds a UBR per client and sends it to an **LLM semantic auditor** (Ollama, Qwen2.5-7B, temperature 0) with a structured JSON prompt. The auditor labels each client benign or malicious; malicious clients receive **zero FedAvg weight** (partial repair by rejection). A rule-based **MockAuditor** is also implemented for dry runs without Ollama—it uses the same numeric thresholds but no LLM calls.
+
+**Key finding (this quarter, MNIST, 5 reps, rounds 11–100).** Under the standard cohort-primary guard, the **UBR evasion attack (C)** reaches the highest attack-phase evasion (~14%). The same evasion attack under a **profile-hybrid** guard (D)—LLM on cohort rules 1–3, fixed profile rules 4–5 when the cohort is clean—drops evasion to **0%** while final accuracy stays ~98%. Condition **E** shows that **model-only poisoning without label flip**, still projected with Task-3 UBR evasion, evades less (~4%) than flip+evasion (C).
+
+**What is in this repo.** The committed `data/` and `results/` logs come from **`--auditor ollama`** runs (five repetitions per condition A–E). Mock is supported in code but was not used to produce those reported numbers.
+
+---
 
 ## Layout
 
@@ -17,20 +25,27 @@ spr26-yan/
 │   └── backfill_summaries.py
 ├── data/              # benign_stats.json, task2 log, condition_* JSONL
 ├── results/           # summary JSON, all_summaries.json, RESULTS.md, CSV
-├── figures/           # plots for the report
-├── notebooks/         # optional Jupyter work
-└── artifacts/         # local pickles from runs (gitignored)
+├── figures/
+├── notebooks/
+└── artifacts/         # local .pkl from reruns (gitignored)
 ```
 
-Do not commit MNIST binaries or `.pkl` files. MNIST is fetched automatically on first run.
+Do not commit MNIST binaries or `.pkl` files.
 
-## Dataset
+---
 
-MNIST via `flwr-datasets` (Hugging Face cache). Official page: http://yann.lecun.com/exdb/mnist/
+## Dataset access
 
-## Dependencies
+MNIST is loaded automatically via **flwr-datasets** (Hugging Face cache on first run).
 
-Tested on Python 3.12:
+- Official source: http://yann.lecun.com/exdb/mnist/
+- Torchvision equivalent: `torchvision.datasets.MNIST(..., download=True)`
+
+---
+
+## Required libraries
+
+Python **3.12**. Tested versions:
 
 | Package | Version |
 |---------|---------|
@@ -42,78 +57,133 @@ Tested on Python 3.12:
 | matplotlib | 3.10.9 |
 | scipy | 1.17.1 |
 | requests | 2.34.2 |
+| ray | (with flwr simulation) |
 
 ```bash
 bash setup_env.sh
 conda activate fedllm
 ```
 
-Or install manually:
+Manual install:
 
 ```bash
 pip install torch torchvision --index-url https://download.pytorch.org/whl/cu124
 pip install "flwr[simulation]==1.9.0" "flwr-datasets[vision]==0.1.0" ray matplotlib scipy requests
 ```
 
-## Commands
+---
 
-From the repo root:
+## Environment setup
 
 ```bash
-conda activate fedllm
+bash setup_env.sh
+source /opt/miniconda3/bin/activate fedllm   # or: conda activate fedllm
 cd src
 ```
 
-**Task 2 — benign profiling** (writes `data/benign_stats.json`):
+---
+
+## Running Task 2 (profiling)
+
+Builds `data/benign_stats.json` and `data/task2_ubr_profiling.jsonl`. Profiling mode does not call the LLM for labels; `--auditor mock` is enough:
 
 ```bash
 python fedllm_guard.py --task profile --auditor mock
 ```
 
-**One condition, mock auditor** (no Ollama):
+---
+
+## Running conditions A–E
+
+| Cond | Client attack | Server guard |
+|------|---------------|--------------|
+| A | Label flip 1→7 | Standard LLM |
+| B | Flip + 5× update scale | Standard LLM |
+| C | Flip + Task-3 UBR evasion | Standard LLM |
+| D | **Same as C** | Profile-hybrid (default for D) |
+| E | **Model-only** backdoor grad steps (no label flip), then **same UBR projection as C** | Standard LLM |
+
+Warmup: in C/D/E, malicious clients send honest updates for rounds 1–10. Primary metric: **`evasion_rate_aligned`** (rounds 11–100 only).
+
+**Mock auditor** (no Ollama; rule-based thresholds only):
 
 ```bash
 python fedllm_guard.py --task A --rep 0 --auditor mock
-python fedllm_guard.py --task D --rep 0 --auditor mock   # D defaults to profile-hybrid
+python fedllm_guard.py --task D --rep 0 --auditor mock
+python fedllm_guard.py --task all --reps 5 --auditor mock
 ```
 
-**Five reps with Ollama** (LLM conditions):
+**Ollama** (used for all committed experiment logs):
 
 ```bash
-# install Ollama: https://ollama.com/download
 ollama pull qwen2.5:7b
 ollama serve   # separate terminal
 
 python fedllm_guard.py --task C --rep 0 --auditor ollama
-python fedllm_guard.py --task D --rep 0 --auditor ollama   # profile-hybrid by default
+python fedllm_guard.py --task D --rep 0 --auditor ollama
+python fedllm_guard.py --task E --rep 0 --auditor ollama
 ```
 
-Refresh metrics from existing JSONL:
+Refresh summaries from existing JSONL:
 
 ```bash
 python backfill_summaries.py
 ```
 
-Outputs: `results/summary_*_rep*.json`, `results/all_summaries.json`, `results/results_table.csv`.
+---
 
-## Conditions
+## Running with Ollama LLM
 
-| | Attack | Guard |
-|---|--------|-------|
-| A | Label flip 1→7 | Standard LLM |
-| B | Flip + 5× scale | Standard LLM |
-| C | Flip + UBR evasion | Standard LLM |
-| D | Same as C | Profile-hybrid |
-| E | Model-only poison + UBR evasion | Standard LLM |
+Install: https://ollama.com/download  
 
-Warmup: rounds 1–10 malicious clients in C/D/E send honest updates. Report evasion uses **rounds 11–100** (`evasion_rate_aligned` in summary JSON).
+Model: `qwen2.5:7b` · Temperature fixed at **0.0** in code · JSON output format enabled.
 
-## Reproduce the numbers in the report
+---
 
-The committed `data/` and `results/` folders already contain the five-rep MNIST runs used in the final report. To recompute summaries only:
+## Output location
+
+| Output | Path |
+|--------|------|
+| Benign stats, JSONL logs | `data/` |
+| Per-rep summaries, table | `results/` |
+| Figures | `figures/` |
+| Pickles from new runs | `artifacts/` (gitignored) |
+
+---
+
+## Reproducing key results
+
+**Summaries only** (fast; uses committed logs):
 
 ```bash
 cd src && python backfill_summaries.py
 ```
 
-To rerun from scratch you need Ollama for LLM conditions and several hours of GPU time; see commands above for each condition.
+See `results/results_table.csv` and `results/RESULTS.md`.
+
+**Full rerun** (slow; needs GPU + Ollama for LLM conditions):
+
+```bash
+cd src
+python fedllm_guard.py --task profile --auditor mock
+for COND in A B C E; do
+  for REP in 0 1 2 3 4; do
+    python fedllm_guard.py --task $COND --rep $REP --auditor ollama
+  done
+done
+for REP in 0 1 2 3 4; do
+  python fedllm_guard.py --task D --rep $REP --auditor ollama
+done
+python backfill_summaries.py
+```
+
+---
+
+## Condition E (model-only vs evasion)
+
+E is **not** the same as C:
+
+- **Poisoning:** malicious clients train on **correct labels** and inject a backdoor via extra gradient steps on class-1→7 samples (`backdoor_gradient_step`). No dataset relabeling.
+- **Evasion:** after forming the poisoned update, the client still runs **`compute_evasion_update`** (Task 3)—the same norm/cosine projection used in C—so the upload is shaped to pass cohort-relative checks.
+
+So E is **model-only poisoning + UBR evasion projection**, not model-only poisoning alone. That is why the table lists both parts.
