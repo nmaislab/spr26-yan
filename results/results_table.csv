@@ -1,0 +1,6 @@
+condition,evasion_rate_aligned_mean_pct,evasion_rate_aligned_std_pct,final_acc_mean_pct,final_acc_std_pct,final_asr_mean_pct,final_asr_std_pct,kl_norm_mean,kl_norm_std,n_reps
+A,8.89,2.66,97.81,0.06,0.106,0.103,0.65,0.09,5
+B,0.0,0.0,97.74,0.09,0.035,0.043,20.6,0.03,5
+C,14.0,2.89,97.77,0.09,0.035,0.043,0.39,0.04,5
+D,0.0,0.0,97.76,0.09,0.053,0.043,0.4,0.1,5
+E,3.93,3.99,97.65,0.18,0.123,0.163,0.37,0.11,5

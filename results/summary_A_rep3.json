@@ -1,0 +1,15 @@
+{
+  "condition": "A",
+  "rep": 3,
+  "num_rounds": 100,
+  "max_round": 100,
+  "evasion_rate": 0.08,
+  "evasion_rate_aligned": 0.05925925925925926,
+  "n_mal_entries": 300,
+  "n_mal_aligned": 270,
+  "n_ben_entries": 700,
+  "final_acc": 0.9781,
+  "final_asr": 0.0026431718061674008,
+  "final_loss": 0.3051571797579527,
+  "kl_norm": 0.5513661118319427
+}
